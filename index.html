@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>古战天棋 - 震撼打击</title>
+    <title>古战天棋 - 名将留名</title>
     <style>
         :root {
             --cell-size: 42px; /* JS将动态修改此值 */
@@ -64,8 +64,16 @@
         .p1-stats { border-bottom: 4px solid var(--p1-color); color: var(--p1-color); }
         .p2-stats { border-bottom: 4px solid var(--p2-color); color: var(--p2-color); }
 
-        .stat-row { display: flex; gap: 10px; font-weight: bold; margin-top: 4px; color: #fff; }
+        .stat-row { display: flex; gap: 10px; font-weight: bold; margin-top: 4px; color: #fff; align-items: center; }
         
+        /* 新增：仪表盘图标样式 */
+        .dash-icon {
+            width: 1.2em; height: 1.2em; 
+            fill: currentColor; 
+            vertical-align: text-bottom;
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+        }
+
         .controls { display: flex; gap: 8px; }
 
         .game-btn {
@@ -188,14 +196,8 @@
 
         /* 特效 */
         .kill-effect {
-            position: absolute; width: 150%; height: 150%; /* 增大尺寸 */
-            left: -25%; top: -25%;
-            display: flex; justify-content: center; align-items: center;
-            font-size: 4rem; /* 增大字体 */
-            z-index: 3000; 
-            animation: big-explosion 1.2s ease-out forwards; /* 延长动画 */
-            pointer-events: none; 
-            text-shadow: 0 0 30px #e74c3c, 0 0 60px red; /* 增强光效 */
+            position: absolute; width: 150%; height: 150%; display: flex; justify-content: center; align-items: center;
+            font-size: 4rem; z-index: 3000; animation: big-explosion 1.2s ease-out forwards; pointer-events: none; text-shadow: 0 0 30px #e74c3c, 0 0 60px red;
         }
 
         @keyframes big-explosion {
@@ -270,6 +272,10 @@
         #game-over-title { font-size: 4rem; font-weight: 900; text-transform: uppercase; letter-spacing: 5px; margin-bottom: 20px; }
         .restart-btn { padding: 12px 30px; font-size: 1.2rem; background: white; color: #000; border: none; border-radius: 30px; cursor: pointer; font-weight: bold; margin-top: 30px; transition: transform 0.2s; }
         .restart-btn:hover { transform: scale(1.1); }
+
+        /* 新增版权信息样式 */
+        .credits-section { margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee; text-align: center; font-size: 0.85rem; color: #7f8c8d; }
+        .credits-name { font-weight: bold; color: #2c3e50; margin-bottom: 4px; }
     </style>
 </head>
 <body>
@@ -279,7 +285,12 @@
             <span>🤖 帝国 (AI)</span>
             <div class="stat-row">
                 <span>🏰 <span id="p1-cities">4</span></span>
-                <span>⚔️ <span id="p1-pop">0</span></span>
+                <span>
+                    <svg viewBox="0 0 100 100" class="dash-icon">
+                        <path d="M50 10 C 35 10 25 20 25 30 C 25 38 30 44 35 46 L 35 75 L 20 85 L 80 85 L 65 75 L 65 50 C 70 48 75 38 75 30 C 75 20 65 10 50 10 Z" />
+                    </svg> 
+                    <span id="p1-pop">0</span>
+                </span>
             </div>
         </div>
         
@@ -293,7 +304,12 @@
             <span>🔵 联盟 (你)</span>
             <div class="stat-row">
                 <span>🏰 <span id="p2-cities">4</span></span>
-                <span>⚔️ <span id="p2-pop">0</span></span>
+                <span>
+                    <svg viewBox="0 0 100 100" class="dash-icon">
+                        <path d="M50 10 C 35 10 25 20 25 30 C 25 38 30 44 35 46 L 35 75 L 20 85 L 80 85 L 65 75 L 65 50 C 70 48 75 38 75 30 C 75 20 65 10 50 10 Z" />
+                    </svg> 
+                    <span id="p2-pop">0</span>
+                </span>
             </div>
         </div>
     </div>
@@ -346,6 +362,11 @@
                 <div class="option-btn" onclick="setDifficulty('high', this)"><span>🔴 困难</span></div>
             </div>
             <button class="game-btn" style="background:#e74c3c; color:white; width:100%" onclick="confirmSettings()">重新开始</button>
+            
+            <div class="credits-section">
+                <div class="credits-name">制作人: Shuhan Sun</div>
+                <div>© 2025 古战天棋 All Rights Reserved</div>
+            </div>
         </div>
     </div>
 
@@ -399,11 +420,8 @@
         climb() { this.play(80, 'sawtooth', 0.2, 0.1); },
         spawn() { this.play(400, 'square', 0.15, 0.1); },
         kill() { 
-            // 增强的击杀音效
             let now = this.ctx.currentTime;
-            // 高频冲击
             this.play(800, 'sawtooth', 0.2, 0.5); 
-            // 低频爆炸模拟
             const osc = this.ctx.createOscillator();
             const gain = this.ctx.createGain();
             osc.type = 'square';
