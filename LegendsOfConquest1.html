@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>征服的传奇 - 军团争霸 (修复版)</title>
+    <style>
+        :root {
+            --cell-size: 42px; /* JS将动态修改此值 */
+            --bg-color: #1a1a1d;
+            --p1-color: #e74c3c; /* 帝国红 (AI) */
+            --p2-color: #3498db; /* 联盟蓝 (玩家) */
+            --wall-color: #7f8c8d;
+            --highlight-move: rgba(241, 196, 15, 0.5);
+            --highlight-attack: rgba(231, 76, 60, 0.7);
+            --highlight-merge: rgba(46, 204, 113, 0.6);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: #ecf0f1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 5px;
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* 顶部仪表盘 */
+        .dashboard {
+            display: flex;
+            width: 98%;
+            max-width: 700px;
+            justify-content: space-between;
+            align-items: center;
+            background: #2c3e50;
+            padding: 5px 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+            font-size: 0.9rem;
+            z-index: 20;
+        }
+
+        .player-stats {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 5px 15px;
+            border-radius: 8px;
+            min-width: 80px;
+            transition: all 0.3s;
+        }
+
+        .active-turn { 
+            box-shadow: 0 0 15px 2px rgba(255,255,255,0.1); 
+            transform: scale(1.05); 
+            background: rgba(255,255,255,0.05); 
+        }
+        .p1-stats { border-bottom: 4px solid var(--p1-color); color: var(--p1-color); }
+        .p2-stats { border-bottom: 4px solid var(--p2-color); color: var(--p2-color); }
+
+        .stat-row { display: flex; gap: 10px; font-weight: bold; margin-top: 4px; color: #fff; }
+        
+        .controls { display: flex; gap: 8px; }
+
+        .game-btn {
+            border: none; padding: 8px 16px; border-radius: 20px; color: #2c3e50;
+            font-weight: 900; font-size: 0.9rem; cursor: pointer; transition: transform 0.1s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        
+        #end-turn-btn {
+            background: linear-gradient(135deg, #f1c40f, #f39c12);
+            box-shadow: 0 4px 0 #d35400;
+        }
+        #end-turn-btn:active { transform: translateY(4px); box-shadow: 0 0 0 #d35400; }
+        #end-turn-btn:disabled { background: #7f8c8d; box-shadow: none; cursor: not-allowed; opacity: 0.7; transform: none;}
+
+        .icon-btn {
+            background: #ecf0f1; box-shadow: 0 4px 0 #bdc3c7; width: 36px; padding: 0; font-size: 1.1rem;
+        }
+        .icon-btn:active { transform: translateY(4px); box-shadow: 0 0 0 #bdc3c7; }
+
+        /* 棋盘容器 */
+        .board-wrapper {
+            position: relative; padding: 10px; background: #111; border-radius: 8px;
+            box-shadow: 0 0 40px rgba(0,0,0,0.9);
+        }
+
+        #game-board {
+            display: grid; gap: 1px; background-color: #000; border: 4px solid #444;
+        }
+
+        #units-layer, #effects-layer {
+            position: absolute; top: 10px; left: 10px; pointer-events: none;
+            width: calc(100% - 20px); height: calc(100% - 20px);
+        }
+        #effects-layer { z-index: 100; }
+
+        .cell {
+            width: var(--cell-size); height: var(--cell-size);
+            display: flex; justify-content: center; align-items: center;
+            position: relative; cursor: pointer; box-sizing: border-box; overflow: hidden;
+        }
+
+        /* 地形 */
+        @keyframes water-flow { 0% { background-position: 0 0; } 100% { background-position: 40px 40px; } }
+        .terrain-0 { background-color: #27ae60; background-image: radial-gradient(#2ecc71 10%, transparent 11%); background-size: 10px 10px; opacity: 0.9; }
+        .terrain-1 { background-color: #b7950b; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 10 L10 90 H90 Z' fill='%23d4ac0d' stroke='%239a7d0a' stroke-width='3'/%3E%3Cpath d='M50 10 L30 90 H70 Z' fill='%23f1c40f' opacity='0.3'/%3E%3Cpath d='M50 10 L50 90' stroke='%237d6608' stroke-width='2' opacity='0.3'/%3E%3C/svg%3E"); background-size: 90%; background-repeat: no-repeat; background-position: bottom center; }
+        .terrain-2 { background-color: #2980b9; background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.15) 0, rgba(255,255,255,0.15) 5px, transparent 5px, transparent 15px), radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 2px, transparent 3px); background-size: 30px 30px; animation: water-flow 3s linear infinite; }
+        /* 小城池样式 */
+        .terrain-3 { 
+            background-color: #7f8c8d; 
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M20 80 L20 40 L10 40 L10 20 L30 20 L30 40 L50 30 L70 40 L70 20 L90 20 L90 40 L80 40 L80 80 Z' fill='%2395a5a6' stroke='%232c3e50' stroke-width='4'/%3E%3Crect x='35' y='50' width='30' height='30' fill='%232c3e50' opacity='0.3'/%3E%3C/svg%3E");
+            background-size: 80%; background-repeat: no-repeat; background-position: center;
+        }
+        .terrain-4 { background-color: #0a3d62; background-image: radial-gradient(circle at center, rgba(255,255,255,0.15) 1px, transparent 2px); background-size: 14px 14px; animation: water-flow 8s linear infinite; }
+
+        /* 城市归属颜色 */
+        .city-p1 { background-color: rgba(231, 76, 60, 0.4); box-shadow: inset 0 0 0 3px var(--p1-color); }
+        .city-p2 { background-color: rgba(52, 152, 219, 0.4); box-shadow: inset 0 0 0 3px var(--p2-color); }
+
+        /* 棋子样式 */
+        .unit-wrapper {
+            position: absolute; width: var(--cell-size); height: var(--cell-size);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 10; pointer-events: none;
+            transition: top 0.2s linear, left 0.2s linear; 
+        }
+
+        .chess-piece {
+            width: 90%; height: 90%;
+            position: relative;
+            display: flex; justify-content: center; align-items: center;
+            filter: drop-shadow(0 4px 3px rgba(0,0,0,0.6));
+            transition: transform 0.2s;
+        }
+
+        /* 棋子 SVG 形状 */
+        .piece-shape path { stroke: #fff; stroke-width: 2px; }
+        .unit-p1 .piece-shape path { fill: var(--p1-color); }
+        .unit-p2 .piece-shape path { fill: var(--p2-color); }
+
+        /* 棋子中间的人数 */
+        .unit-count {
+            position: absolute;
+            color: #fff;
+            font-weight: 900;
+            font-size: 1.2rem;
+            text-shadow: 0 2px 3px #000;
+            z-index: 2;
+            top: 25%;
+            left: 0; right: 0; text-align: center;
+            pointer-events: none;
+        }
+
+        /* 行动后变暗 */
+        .unit-container.unit-moved .chess-piece {
+            filter: brightness(0.6) grayscale(0.6) drop-shadow(0 2px 1px rgba(0,0,0,0.8));
+            opacity: 0.9;
+        }
+        /* 确保计数也变暗一点 */
+        .unit-container.unit-moved .unit-count {
+            opacity: 0.8;
+        }
+
+        /* 选中 */
+        .unit-selected .chess-piece {
+            transform: scale(1.2) translateY(-5px);
+            filter: drop-shadow(0 0 10px #f1c40f);
+        }
+        
+        .speed-badge {
+            display: none; position: absolute; top: 0; right: 0;
+            background: #2c3e50; color: #f1c40f; border-radius: 50%;
+            width: 14px; height: 14px; font-size: 9px;
+            justify-content: center; align-items: center; border: 1px solid white; 
+            z-index: 11;
+        }
+        .unit-selected .speed-badge { display: flex; }
+
+        /* 高亮 */
+        .selected-cell::after { content: ''; position: absolute; inset: 0; border: 3px solid #f1c40f; border-radius: 4px; z-index: 5; animation: pulse-border 1.5s infinite; }
+        .hl-move::after { content:''; position:absolute; inset: 35%; background: var(--highlight-move); border-radius: 50%; box-shadow: 0 0 5px var(--highlight-move); z-index: 2; }
+        .hl-attack::after { content:''; position:absolute; inset: 5px; border: 3px solid var(--highlight-attack); animation: pulse-attack 1s infinite; z-index: 2; }
+        .hl-merge::after { content:''; position:absolute; inset: 5px; border: 3px dashed var(--highlight-merge); z-index: 2; }
+
+        /* 特效 */
+        .kill-effect {
+            position: absolute; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center;
+            font-size: 2.5rem; z-index: 999; animation: slash 0.4s ease-out forwards; pointer-events: none; text-shadow: 0 0 15px red;
+        }
+        .text-effect {
+            position: absolute; color: #fff; font-weight: bold; font-size: 0.8rem; text-shadow: 0 1px 2px black;
+            animation: floatUp 1s forwards; z-index: 999; pointer-events: none; white-space: nowrap;
+        }
+
+        /* 全屏结算动画 */
+        #game-over-screen {
+            position: fixed; inset: 0; z-index: 2000; display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.9); color: white; opacity: 0; transition: opacity 1s;
+        }
+        #game-over-screen.show { display: flex; opacity: 1; }
+        #game-over-title { font-size: 4rem; font-weight: 900; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 5px; }
+        .victory-mode { background: radial-gradient(circle, rgba(241, 196, 15, 0.4) 0%, rgba(0,0,0,0.95) 80%); }
+        .victory-mode #game-over-title { color: #f1c40f; text-shadow: 0 0 20px #f39c12, 0 0 40px #e67e22; animation: win-pulse 2s infinite; }
+        .defeat-mode { background: radial-gradient(circle, rgba(192, 57, 43, 0.4) 0%, rgba(0,0,0,0.95) 80%); }
+        .defeat-mode #game-over-title { color: #c0392b; text-shadow: 0 0 10px #e74c3c; font-family: 'Courier New', Courier, monospace; }
+        
+        .restart-btn {
+            padding: 15px 40px; font-size: 1.5rem; background: white; color: black; border: none;
+            border-radius: 50px; cursor: pointer; font-weight: bold; margin-top: 30px;
+            box-shadow: 0 0 20px rgba(255,255,255,0.5); transition: transform 0.2s;
+        }
+        .restart-btn:hover { transform: scale(1.1); }
+
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-30px); } }
+        @keyframes slash { 0% { transform: scale(0.5) rotate(-45deg); opacity: 0; } 50% { transform: scale(1.5) rotate(0deg); opacity: 1; } 100% { transform: scale(1) rotate(45deg); opacity: 0; } }
+        @keyframes win-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        @keyframes pulse-border { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        @keyframes pulse-attack { 0% { opacity: 0.4; transform: scale(0.9); } 50% { opacity: 0.8; transform: scale(1); } 100% { opacity: 0.4; transform: scale(0.9); } }
+
+        .info-bar { margin-top: 15px; color: #bdc3c7; font-size: 0.9rem; text-align: center; }
+        
+        /* 通用弹窗 */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 999; backdrop-filter: blur(3px); opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .modal-overlay.show { opacity: 1; pointer-events: auto; }
+        .modal-content { background: #fff; color: #333; width: 90%; max-width: 450px; border-radius: 12px; padding: 20px; transform: translateY(20px); transition: transform 0.3s; }
+        .modal-overlay.show .modal-content { transform: translateY(0); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
+        .close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #7f8c8d; }
+        .settings-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+        .option-btn { padding: 12px; border: 2px solid #ecf0f1; background: #fff; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; }
+        .option-btn.active { background: #3498db; color: white; border-color: #2980b9; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <div class="player-stats p1-stats" id="p1-box">
+            <span>🤖 帝国 (AI)</span>
+            <div class="stat-row">
+                <span>🏰 <span id="p1-cities">4</span></span>
+                <span>⚔️ <span id="p1-pop">0</span></span>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="settings-btn" class="game-btn icon-btn" onclick="toggleSettings()">⚙️</button>
+            <button id="help-btn" class="game-btn icon-btn" onclick="toggleTutorial()">📜</button>
+            <button id="end-turn-btn" class="game-btn" onclick="endTurn()">结束回合</button>
+        </div>
+        
+        <div class="player-stats p2-stats" id="p2-box">
+            <span>🔵 联盟 (你)</span>
+            <div class="stat-row">
+                <span>🏰 <span id="p2-cities">4</span></span>
+                <span>⚔️ <span id="p2-pop">0</span></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="board-wrapper">
+        <div id="game-board"></div>
+        <div id="units-layer"></div>
+        <div id="effects-layer"></div>
+    </div>
+    
+    <div class="info-bar" id="game-log">游戏开始。攻占敌方所有城池。</div>
+
+    <!-- 全屏结算动画 -->
+    <div id="game-over-screen">
+        <div id="game-over-title">VICTORY</div>
+        <div id="game-over-msg">你征服了这片土地！</div>
+        <button class="restart-btn" onclick="location.reload()">再战一局</button>
+    </div>
+
+    <!-- 教程弹窗 -->
+    <div id="tutorial-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><h2>作战指南</h2><button class="close-btn" onclick="toggleTutorial()">×</button></div>
+            <div style="line-height:1.6">
+                <p><b>🏆 胜利：</b> 占领敌方全部 <b>4座</b> 城池。</p>
+                <p><b>🏰 占领：</b> 移动到敌方城池格子上即可占领。</p>
+                <p><b>⚔️ 征兵：</b> 每回合城池空位会自动生成部队。</p>
+                <p><b>🌊 地形：</b> 水域双倍速；山地不可通行。</p>
+            </div>
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="game-btn" style="background:#2c3e50; color:white; width:100%" onclick="toggleTutorial()">明白了</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 设置弹窗 -->
+    <div id="settings-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><h2>游戏设置</h2><button class="close-btn" onclick="toggleSettings()">×</button></div>
+            <div class="settings-group">
+                <div><b>地图大小</b></div>
+                <div class="option-btn active" onclick="setMapSize(13, this)"><span>⚡ 微型 (13x13)</span></div>
+                <div class="option-btn" onclick="setMapSize(16, this)"><span>🛡️ 中型 (16x16)</span></div>
+                <div class="option-btn" onclick="setMapSize(19, this)"><span>🌍 宏大 (19x19)</span></div>
+            </div>
+            <div class="settings-group">
+                <div><b>AI 难度</b></div>
+                <div class="option-btn active" onclick="setDifficulty('low', this)"><span>🟢 简单</span></div>
+                <div class="option-btn" onclick="setDifficulty('medium', this)"><span>🟡 普通</span></div>
+                <div class="option-btn" onclick="setDifficulty('high', this)"><span>🔴 困难</span></div>
+            </div>
+            <button class="game-btn" style="background:#e74c3c; color:white; width:100%" onclick="confirmSettings()">重新开始</button>
+        </div>
+    </div>
+
+<script>
+    const AudioSys = {
+        ctx: new (window.AudioContext || window.webkitAudioContext)(),
+        play(freq, type, dur, vol=0.1) {
+            if(this.ctx.state === 'suspended') this.ctx.resume();
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+            gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + dur);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            osc.stop(this.ctx.currentTime + dur);
+        },
+        step() { 
+            if(this.ctx.state === 'suspended') this.ctx.resume();
+            const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(50, t + 0.1);
+            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            osc.stop(t + 0.1);
+        },
+        water() { this.play(250, 'sine', 0.2, 0.05); },
+        climb() { this.play(80, 'sawtooth', 0.2, 0.1); },
+        spawn() { this.play(400, 'square', 0.15, 0.1); },
+        kill() { this.play(100, 'sawtooth', 0.1, 0.3); setTimeout(() => this.play(800, 'sawtooth', 0.2, 0.1), 50); },
+        merge() { this.play(600, 'sine', 0.2, 0.1); },
+        capture() { this.play(500, 'square', 0.4, 0.2); },
+        win() { 
+            let now = this.ctx.currentTime;
+            [523, 659, 784, 1046].forEach((f, i) => {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.frequency.value = f;
+                gain.gain.value = 0.1;
+                gain.gain.exponentialRampToValueAtTime(0.01, now + i*0.2 + 0.5);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now + i*0.2);
+                osc.stop(now + i*0.2 + 0.5);
+            });
+        },
+        lose() {
+            this.play(100, 'sawtooth', 1.0, 0.2);
+            setTimeout(()=>this.play(80, 'sawtooth', 1.0, 0.2), 400);
+        }
+    };
+
+    let BOARD_SIZE = 13;
+    const TERRAIN = { PLAIN: 0, MOUNTAIN: 1, RIVER: 2, CITY: 3, SEA: 4 };
+    const PLAYERS = { P1: 1, P2: 2 }; 
+
+    let state = {
+        map: [], units: [], cities: [], turn: PLAYERS.P2, 
+        selectedUnit: null, gameOver: false, validMoves: [],
+        unitIdCounter: 0, aiThinking: false, isAnimating: false 
+    };
+
+    let gameSettings = { difficulty: 'low' };
+    let tempBoardSize = 13;
+    let tempDifficulty = 'low';
+
+    const SVG_CHESS_PAWN = `<svg viewBox="0 0 100 100" class="chess-piece">
+        <g class="piece-shape">
+            <path d="M50 10 C 35 10 25 20 25 30 C 25 38 30 44 35 46 L 35 75 L 20 85 L 80 85 L 65 75 L 65 46 C 70 44 75 38 75 30 C 75 20 65 10 50 10 Z" />
+            <circle cx="50" cy="28" r="12" fill="rgba(0,0,0,0.15)" stroke="none"/>
+        </g>
+    </svg>`;
+
+    function initGame() {
+        const baseSize = Math.min(window.innerWidth * 0.85, 600) / BOARD_SIZE;
+        document.documentElement.style.setProperty('--cell-size', `${Math.max(20, Math.min(50, baseSize))}px`);
+        
+        const boardEl = document.getElementById('game-board');
+        boardEl.style.gridTemplateColumns = `repeat(${BOARD_SIZE}, var(--cell-size))`;
+        boardEl.style.gridTemplateRows = `repeat(${BOARD_SIZE}, var(--cell-size))`;
+
+        generateMap();
+        state.units = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
+        state.turn = PLAYERS.P2; 
+        state.gameOver = false;
+        state.aiThinking = false;
+        state.isAnimating = false;
+        
+        document.getElementById('units-layer').innerHTML = '';
+        state.unitIdCounter = 0;
+        document.getElementById('game-over-screen').className = '';
+
+        startTurnLogic(); 
+        renderBoard(); 
+        renderUnits(); 
+        updateUI();
+
+        if(!window.hasShownTutorial) {
+            setTimeout(toggleTutorial, 500);
+            window.hasShownTutorial = true;
+        }
+    }
+
+    function toggleTutorial() { document.getElementById('tutorial-overlay').classList.toggle('show'); }
+    function toggleSettings() { document.getElementById('settings-overlay').classList.toggle('show'); }
+    
+    function setMapSize(size, btn) {
+        tempBoardSize = size;
+        const group = btn.closest('.settings-group');
+        group.querySelectorAll('.option-btn').forEach(el => el.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    function setDifficulty(diff, btn) {
+        tempDifficulty = diff;
+        const group = btn.closest('.settings-group');
+        group.querySelectorAll('.option-btn').forEach(el => el.classList.remove('active'));
+        btn.classList.add('active');
+    }
+    function confirmSettings() {
+        BOARD_SIZE = tempBoardSize;
+        gameSettings.difficulty = tempDifficulty;
+        toggleSettings();
+        initGame();
+    }
+
+    function generateMap() {
+        state.map = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(TERRAIN.PLAIN));
+        state.cities = [];
+        
+        for(let r=0; r<BOARD_SIZE; r++) { state.map[r][0] = TERRAIN.RIVER; state.map[r][BOARD_SIZE-1] = TERRAIN.RIVER; }
+        let mid = Math.floor(BOARD_SIZE / 2);
+        for(let c=1; c<BOARD_SIZE-1; c++) { state.map[mid][c] = TERRAIN.RIVER; }
+
+        for(let r=0; r<mid; r++) { 
+            for(let c=1; c<BOARD_SIZE-1; c++) {
+                if(Math.random() < 0.2) {
+                    state.map[r][c] = TERRAIN.MOUNTAIN;
+                    state.map[BOARD_SIZE-1-r][BOARD_SIZE-1-c] = TERRAIN.MOUNTAIN; 
+                }
+            }
+        }
+
+        let attempts = 0;
+        while(state.cities.length < 4 && attempts < 100) { 
+            let r1 = Math.floor(Math.random() * (mid - 1));
+            let c1 = Math.floor(Math.random() * (BOARD_SIZE - 2)) + 1;
+            
+            if(state.map[r1][c1] === TERRAIN.PLAIN) {
+                addCity(r1, c1, PLAYERS.P1);
+                addCity(BOARD_SIZE-1-r1, BOARD_SIZE-1-c1, PLAYERS.P2);
+            }
+            attempts++;
+        }
+        while(state.cities.filter(c=>c.owner===PLAYERS.P1).length < 4) {
+             let r = Math.floor(Math.random() * (mid - 1));
+             let c = Math.floor(Math.random() * (BOARD_SIZE - 2)) + 1;
+             if(state.map[r][c] !== TERRAIN.CITY) {
+                 state.map[r][c] = TERRAIN.PLAIN; 
+                 addCity(r, c, PLAYERS.P1);
+                 state.map[BOARD_SIZE-1-r][BOARD_SIZE-1-c] = TERRAIN.PLAIN;
+                 addCity(BOARD_SIZE-1-r, BOARD_SIZE-1-c, PLAYERS.P2);
+             }
+        }
+    }
+
+    function addCity(r, c, owner) {
+        state.cities.push({r, c, owner});
+        state.map[r][c] = TERRAIN.CITY;
+    }
+
+    function startTurnLogic() {
+        for(let r=0; r<BOARD_SIZE; r++) {
+            for(let c=0; c<BOARD_SIZE; c++) {
+                if(state.units[r][c] && state.units[r][c].owner === state.turn) {
+                    state.units[r][c].moved = false;
+                }
+            }
+        }
+        let newTroops = 0;
+        state.cities.forEach(city => {
+            if(city.owner === state.turn) {
+                if(!state.units[city.r][city.c]) {
+                    createUnit(city.r, city.c, state.turn, 1);
+                    newTroops++;
+                }
+            }
+        });
+        if(newTroops > 0) AudioSys.spawn();
+        updateLog(`回合开始。生成 ${newTroops} 支新军。`);
+        if(state.turn === PLAYERS.P1 && !state.gameOver) setTimeout(runAITurn, 1000);
+    }
+
+    function createUnit(r, c, owner, count) {
+        state.units[r][c] = { id: `u-${state.unitIdCounter++}`, owner: owner, count: count, speed: 5, moved: false };
+    }
+
+    function endTurn() {
+        if(state.gameOver || state.aiThinking || state.isAnimating) return;
+        state.selectedUnit = null; state.validMoves = [];
+        state.turn = state.turn === PLAYERS.P1 ? PLAYERS.P2 : PLAYERS.P1;
+        startTurnLogic(); renderBoard(); renderUnits(); updateUI();
+    }
+
+    function checkAutoEndTurn() {
+        if(state.turn !== PLAYERS.P2 || state.gameOver || state.isAnimating) return;
+        let hasActions = false;
+        for(let r=0; r<BOARD_SIZE; r++) for(let c=0; c<BOARD_SIZE; c++) {
+            const u = state.units[r][c];
+            if(u && u.owner === PLAYERS.P2 && !u.moved) { hasActions = true; break; }
+        }
+        if(!hasActions) setTimeout(() => { updateLog("全军行动完毕"); endTurn(); }, 800);
+    }
+
+    async function runAITurn() {
+        state.aiThinking = true;
+        updateLog("🤖 帝国正在思考...");
+        updateUI();
+        let aiUnits = [];
+        for(let r=0; r<BOARD_SIZE; r++) for(let c=0; c<BOARD_SIZE; c++) {
+            if(state.units[r][c] && state.units[r][c].owner === PLAYERS.P1) aiUnits.push({r, c, u: state.units[r][c]});
+        }
+        
+        let enemyCities = state.cities.filter(c => c.owner === PLAYERS.P2);
+        
+        aiUnits.sort((a, b) => {
+            let distA = Math.min(...enemyCities.map(ec => Math.abs(a.r - ec.r) + Math.abs(a.c - ec.c)));
+            let distB = Math.min(...enemyCities.map(ec => Math.abs(b.r - ec.r) + Math.abs(b.c - ec.c)));
+            return distA - distB;
+        });
+
+        for(let unitObj of aiUnits) {
+            if(state.gameOver) break;
+            if(state.units[unitObj.r][unitObj.c] !== unitObj.u) continue;
+            let moves = getValidMovesForAI(unitObj.r, unitObj.c, unitObj.u);
+            if(moves.length > 0) {
+                let bestMove = evaluateBestMove(unitObj, moves);
+                if(bestMove) {
+                    await new Promise(r => setTimeout(r, 100));
+                    await animateMoveExecution({r: unitObj.r, c: unitObj.c}, bestMove);
+                }
+            }
+        }
+        state.aiThinking = false;
+        if(!state.gameOver) endTurn();
+    }
+
+    function getValidMovesForAI(startR, startC, unit) {
+        let validMoves = [];
+        let queue = [[startR, startC, 0]]; 
+        let costMap = new Map(); costMap.set(`${startR},${startC}`, 0);
+
+        while(queue.length > 0) {
+            queue.sort((a,b) => a[2] - b[2]);
+            let [r, c, cost] = queue.shift();
+            const curMtn = state.map[r][c] === TERRAIN.MOUNTAIN;
+            const curWater = state.map[r][c] === TERRAIN.RIVER;
+
+            [[0,1],[0,-1],[1,0],[-1,0]].forEach(dir => {
+                let nr = r + dir[0], nc = c + dir[1];
+                if(nr < 0 || nr >= BOARD_SIZE || nc < 0 || nc >= BOARD_SIZE) return;
+                const t = state.map[nr][nc];
+                const isWater = (t === TERRAIN.RIVER);
+                const isMtn = (t === TERRAIN.MOUNTAIN);
+
+                if(curMtn && isMtn) return; 
+
+                let stepCost = 1;
+                let stops = false;
+                if(curWater && isWater) stepCost = 0.5;
+                else if(curWater && !isWater) { if(cost > 0) return; stops = true; }
+                else if(!curWater && isWater) stops = true;
+                else if(curMtn && !isMtn) stops = true;
+
+                let newCost = cost + stepCost;
+                if(newCost <= unit.speed) {
+                    const key = `${nr},${nc}`;
+                    if(!costMap.has(key) || costMap.get(key) > newCost) {
+                        costMap.set(key, newCost);
+                        const targetUnit = state.units[nr][nc];
+                        if(!targetUnit) {
+                            validMoves.push({r: nr, c: nc, type: 'move'});
+                            if(!stops) queue.push([nr, nc, newCost]);
+                        } else {
+                            if(targetUnit.owner !== unit.owner) {
+                                let def = targetUnit.count;
+                                if(isMtn) def *= 2;
+                                if(unit.count > def) validMoves.push({r: nr, c: nc, type: 'attack'});
+                            } else {
+                                if(targetUnit.count < 5) validMoves.push({r: nr, c: nc, type: 'merge'});
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        return validMoves;
+    }
+
+    function evaluateBestMove(unitObj, moves) {
+        let bestScore = -Infinity, bestMove = null;
+        const enemyCities = state.cities.filter(c => c.owner !== unitObj.u.owner);
+        let rnd = gameSettings.difficulty === 'low' ? 20 : (gameSettings.difficulty === 'medium' ? 5 : 0);
+
+        moves.forEach(move => {
+            let score = 0;
+            let capturedCity = enemyCities.find(c => c.r === move.r && c.c === move.c);
+            if(capturedCity) score += 2000;
+
+            if(move.type === 'attack') {
+                score += 200;
+                if(gameSettings.difficulty === 'high') score += state.units[move.r][move.c].count * 10;
+            }
+            if(move.type === 'merge') {
+                if(gameSettings.difficulty === 'low') score += 10;
+                else {
+                    if(unitObj.u.count + state.units[move.r][move.c].count <= 4) score += 50; else score -= 20;
+                }
+            }
+            if(move.type === 'move') {
+                let minDist = Infinity;
+                enemyCities.forEach(ec => {
+                    let d = Math.abs(move.r - ec.r) + Math.abs(move.c - ec.c);
+                    if(d < minDist) minDist = d;
+                });
+                let curMinDist = Infinity;
+                enemyCities.forEach(ec => {
+                    let d = Math.abs(unitObj.r - ec.r) + Math.abs(unitObj.c - ec.c);
+                    if(d < curMinDist) curMinDist = d;
+                });
+                if(minDist < curMinDist) score += 20;
+                if(state.map[move.r][move.c] === TERRAIN.MOUNTAIN) score += 15;
+                if(state.map[move.r][move.c] === TERRAIN.RIVER) score += 5;
+            }
+            score += Math.random() * rnd;
+            if(score > bestScore) { bestScore = score; bestMove = move; }
+        });
+        
+        if(gameSettings.difficulty === 'low' && Math.random() < 0.3 && moves.length > 0) 
+            return moves[Math.floor(Math.random() * moves.length)];
+        return bestMove;
+    }
+
+    function handleClick(r, c) {
+        if(state.gameOver || state.turn === PLAYERS.P1 || state.isAnimating) return; 
+        const move = state.validMoves.find(m => m.r === r && m.c === c);
+        if(state.selectedUnit && move) {
+            executeActionWithAnimation(state.selectedUnit, move);
+            return;
+        }
+        const unit = state.units[r][c];
+        if(unit && unit.owner === state.turn && !unit.moved) {
+            state.selectedUnit = {r, c};
+            state.validMoves = getValidMovesForAI(r, c, unit);
+            renderBoard(); renderUnits(); 
+        } else {
+            state.selectedUnit = null; state.validMoves = [];
+            renderBoard(); renderUnits();
+        }
+    }
+
+    async function executeActionWithAnimation(from, move) {
+        await animateMoveExecution(from, move);
+        checkAutoEndTurn();
+    }
+
+    async function animateMoveExecution(from, move) {
+        state.isAnimating = true;
+        const path = findPathForAnimation(from, move);
+        const unit = state.units[from.r][from.c];
+        const unitDom = document.getElementById(unit.id);
+
+        if(path.length > 1) {
+            for(let i=1; i<path.length; i++) {
+                const step = path[i];
+                const t = state.map[step.r][step.c];
+                let duration = 200; 
+                if(t === TERRAIN.RIVER) { duration = 100; AudioSys.water(); } 
+                else if(t === TERRAIN.MOUNTAIN) { duration = 300; showFloatText(step.r, step.c, "攀登"); AudioSys.climb(); }
+                else { AudioSys.step(); }
+
+                const leftPct = (step.c * 100 / BOARD_SIZE) + '%';
+                const topPct = (step.r * 100 / BOARD_SIZE) + '%';
+                
+                if(unitDom) {
+                    unitDom.style.transition = `top ${duration}ms linear, left ${duration}ms linear`;
+                    unitDom.style.left = leftPct;
+                    unitDom.style.top = topPct;
+                }
+                await new Promise(r => setTimeout(r, duration)); 
+            }
+        }
+        executeActionLogic(from, move);
+        state.isAnimating = false;
+        renderBoard(); renderUnits(); updateUI();
+    }
+
+    function findPathForAnimation(start, end) {
+        let queue = [[start]];
+        let visited = new Set(); visited.add(`${start.r},${start.c}`);
+        
+        while(queue.length > 0) {
+            let path = queue.shift();
+            let curr = path[path.length-1];
+            if(curr.r === end.r && curr.c === end.c) return path;
+            [[0,1],[0,-1],[1,0],[-1,0]].forEach(dir => {
+                let nr = curr.r + dir[0], nc = curr.c + dir[1];
+                if(nr>=0 && nr<BOARD_SIZE && nc>=0 && nc<BOARD_SIZE) {
+                    if(state.map[nr][nc] === TERRAIN.MOUNTAIN && state.map[start.r][start.c] === TERRAIN.MOUNTAIN) return;
+                    if(!visited.has(`${nr},${nc}`)) {
+                        visited.add(`${nr},${nc}`);
+                        queue.push([...path, {r:nr, c:nc}]);
+                    }
+                }
+            });
+        }
+        return [start, end];
+    }
+
+    function executeActionLogic(from, move) {
+        const actor = state.units[from.r][from.c];
+        if(!actor) return; // Safety check
+        const target = state.units[move.r][move.c];
+
+        const targetCity = state.cities.find(c => c.r === move.r && c.c === move.c);
+        if (targetCity && targetCity.owner !== actor.owner) {
+            targetCity.owner = actor.owner;
+            AudioSys.capture();
+            updateLog(`${actor.owner === PLAYERS.P1 ? '帝国' : '联盟'} 夺取了一座城池！`);
+        }
+
+        if(move.type === 'move') {
+            state.units[move.r][move.c] = actor;
+            state.units[from.r][from.c] = null;
+            actor.moved = true;
+        }
+        else if(move.type === 'attack') {
+            playKillEffect(move.r, move.c); AudioSys.kill();
+            state.units[move.r][move.c] = actor;
+            state.units[from.r][from.c] = null;
+            actor.moved = true;
+            updateLog(`击败敌军！`);
+        }
+        else if(move.type === 'merge') {
+            let sum = target.count + actor.count;
+            if(sum > 5) sum = 5;
+            target.count = sum;
+            target.speed = Math.max(1, Math.min(actor.speed, target.speed) - 1);
+            target.moved = true;
+            state.units[from.r][from.c] = null;
+            AudioSys.merge();
+            updateLog("部队合并！");
+        }
+        checkWinCondition();
+        state.selectedUnit = null; state.validMoves = [];
+    }
+
+    function showFloatText(r, c, text) {
+        const layer = document.getElementById('effects-layer');
+        const div = document.createElement('div');
+        div.className = 'text-effect';
+        div.innerText = text;
+        div.style.left = (c * 100 / BOARD_SIZE) + '%';
+        div.style.top = (r * 100 / BOARD_SIZE) + '%';
+        layer.appendChild(div);
+        setTimeout(() => div.remove(), 1000);
+    }
+
+    function playKillEffect(r, c) {
+        const layer = document.getElementById('effects-layer');
+        const effect = document.createElement('div');
+        effect.className = 'kill-effect';
+        effect.innerHTML = '⚔️💥'; 
+        effect.style.left = (c * 100 / BOARD_SIZE) + '%';
+        effect.style.top = (r * 100 / BOARD_SIZE) + '%';
+        effect.style.width = (100 / BOARD_SIZE) + '%';
+        effect.style.height = (100 / BOARD_SIZE) + '%';
+        layer.appendChild(effect);
+        setTimeout(() => effect.remove(), 500);
+    }
+
+    function checkWinCondition() {
+        const p1Cities = state.cities.filter(c => c.owner === PLAYERS.P1).length;
+        const p2Cities = state.cities.filter(c => c.owner === PLAYERS.P2).length;
+
+        if (p1Cities === 0) showGameOver(PLAYERS.P2);
+        else if (p2Cities === 0) showGameOver(PLAYERS.P1);
+    }
+
+    function showGameOver(winnerId) {
+        state.gameOver = true;
+        AudioSys.win();
+        const screen = document.getElementById('game-over-screen');
+        const title = document.getElementById('game-over-title');
+        const msg = document.getElementById('game-over-msg');
+        
+        screen.className = winnerId === PLAYERS.P2 ? 'show victory-mode' : 'show defeat-mode';
+        title.innerText = winnerId === PLAYERS.P2 ? 'VICTORY' : 'DEFEAT';
+        msg.innerText = winnerId === PLAYERS.P2 ? '联盟获得了最终胜利！' : '帝国碾碎了你的抵抗...';
+        
+        if(winnerId === PLAYERS.P1) AudioSys.lose();
+    }
+
+    function renderBoard() {
+        const board = document.getElementById('game-board');
+        board.innerHTML = '';
+        for(let r=0; r<BOARD_SIZE; r++) {
+            for(let c=0; c<BOARD_SIZE; c++) {
+                const cell = document.createElement('div');
+                const type = state.map[r][c];
+                cell.className = `cell terrain-${type}`;
+                if(state.turn === PLAYERS.P2 && !state.isAnimating) cell.onclick = () => handleClick(r, c);
+
+                if(type === TERRAIN.CITY) {
+                    const city = state.cities.find(ct => ct.r === r && ct.c === c);
+                    if(city) {
+                        cell.classList.add(city.owner === PLAYERS.P1 ? 'city-p1' : 'city-p2');
+                    }
+                }
+
+                if(state.selectedUnit && state.selectedUnit.r === r && state.selectedUnit.c === c) {
+                    cell.classList.add('selected-cell');
+                }
+                const move = state.validMoves.find(m => m.r === r && m.c === c);
+                if(move) {
+                    if(move.type === 'move') cell.classList.add('hl-move');
+                    if(move.type === 'attack') cell.classList.add('hl-attack');
+                    if(move.type === 'merge') cell.classList.add('hl-merge');
+                }
+                board.appendChild(cell);
+            }
+        }
+    }
+
+    function renderUnits() {
+        const layer = document.getElementById('units-layer');
+        const existingDoms = {};
+        Array.from(layer.children).forEach(el => existingDoms[el.id] = el);
+        const keepIds = new Set();
+
+        for(let r=0; r<BOARD_SIZE; r++) {
+            for(let c=0; c<BOARD_SIZE; c++) {
+                const unit = state.units[r][c];
+                if(unit) {
+                    keepIds.add(unit.id);
+                    let el = existingDoms[unit.id];
+                    const leftPct = (c * 100 / BOARD_SIZE) + '%';
+                    const topPct = (r * 100 / BOARD_SIZE) + '%';
+
+                    if(!el) {
+                        el = document.createElement('div');
+                        el.id = unit.id;
+                        el.className = 'unit-wrapper';
+                        el.innerHTML = `
+                            <div class="unit-container">
+                                ${SVG_CHESS_PAWN}
+                                <div class="unit-count"></div>
+                                <div class="speed-badge"></div>
+                            </div>
+                        `;
+                        layer.appendChild(el);
+                        el.style.left = leftPct; el.style.top = topPct;
+                    }
+
+                    if (!state.isAnimating) { el.style.left = leftPct; el.style.top = topPct; }
+
+                    const container = el.querySelector('.unit-container');
+                    container.className = `unit-container unit-${unit.owner === PLAYERS.P1 ? 'p1' : 'p2'}`;
+                    
+                    if(unit.moved) container.classList.add('unit-moved');
+                    else container.classList.remove('unit-moved');
+
+                    if(state.selectedUnit && state.selectedUnit.r === r && state.selectedUnit.c === c) el.classList.add('unit-selected');
+                    else el.classList.remove('unit-selected');
+
+                    el.querySelector('.unit-count').textContent = unit.count;
+                    el.querySelector('.speed-badge').textContent = unit.speed;
+                }
+            }
+        }
+        for(let id in existingDoms) if(!keepIds.has(id)) existingDoms[id].remove();
+    }
+
+    function updateUI() {
+        const p1Box = document.getElementById('p1-box');
+        const p2Box = document.getElementById('p2-box');
+        if(state.turn === PLAYERS.P1) { p1Box.classList.add('active-turn'); p2Box.classList.remove('active-turn'); } 
+        else { p2Box.classList.add('active-turn'); p1Box.classList.remove('active-turn'); }
+        
+        const endBtn = document.getElementById('end-turn-btn');
+        endBtn.disabled = (state.turn === PLAYERS.P1);
+
+        const p1c = state.cities.filter(c => c.owner === PLAYERS.P1).length;
+        const p2c = state.cities.filter(c => c.owner === PLAYERS.P2).length;
+        
+        let p1Pop = 0, p2Pop = 0;
+        for(let r=0; r<BOARD_SIZE; r++) {
+            for(let c=0; c<BOARD_SIZE; c++) {
+                let u = state.units[r][c];
+                if(u) {
+                    if(u.owner === PLAYERS.P1) p1Pop += u.count;
+                    else p2Pop += u.count;
+                }
+            }
+        }
+        document.getElementById('p1-pop').innerText = p1Pop;
+        document.getElementById('p2-pop').innerText = p2Pop;
+        document.getElementById('p1-cities').innerText = p1c;
+        document.getElementById('p2-cities').innerText = p2c;
+    }
+
+    function updateLog(msg) { document.getElementById('game-log').innerText = msg; }
+
+    initGame();
+</script>
+</body>
+</html>
