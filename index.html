@@ -332,15 +332,31 @@
     <!-- 教程弹窗 -->
     <div id="tutorial-overlay" class="modal-overlay">
         <div class="modal-content">
-            <div class="modal-header"><h2>作战指南</h2><button class="close-btn" onclick="toggleTutorial()">×</button></div>
-            <div style="line-height:1.6">
-                <p><b>🏆 胜利：</b> 占领敌方全部 <b>4座</b> 城池。</p>
-                <p><b>🏰 占领：</b> 移动到敌方城池格子上即可占领。</p>
-                <p><b>⚔️ 征兵：</b> 每回合城池空位会自动生成部队。</p>
-                <p><b>🌊 地形：</b> 水域双倍速；山地不可通行。</p>
+            <div class="modal-header"><h2>⚔️ 作战指南</h2><button class="close-btn" onclick="toggleTutorial()">×</button></div>
+            <div style="line-height:1.6; font-size: 0.9rem; text-align: left;">
+                
+                <h3 style="color:#f39c12; margin:10px 0 5px; border-bottom:1px solid #eee; padding-bottom:5px;">🏆 胜利目标</h3>
+                <p style="margin:5px 0">战场上分布着红蓝双方各 <b>4座城池</b>。移动到敌方城池格子上即可占领。<b>攻占敌方所有城池</b>即获胜。</p>
+
+                <h3 style="color:#e74c3c; margin:15px 0 5px; border-bottom:1px solid #eee; padding-bottom:5px;">⚔️ 战斗与合兵</h3>
+                <ul style="margin:0; padding-left:20px; list-style-type: disc;">
+                    <li style="margin-bottom:5px"><b>击杀判定</b>：<b>人数多者胜</b>。进攻方人数必须 <b>&gt;</b> 防守方人数。</li>
+                    <li style="margin-bottom:5px"><b>合兵机制</b>：移动到己方部队上可合并。
+                        <br>👉 <b>上限：5人</b> (满编后进化为王者棋子)。
+                        <br>👉 <b>代价</b>：合并后速度会降低。
+                    </li>
+                    <li style="margin-bottom:5px"><b>暴兵机制</b>：回合开始时，己方城池内<b>所有空位</b>自动生成新兵。</li>
+                </ul>
+
+                <h3 style="color:#3498db; margin:15px 0 5px; border-bottom:1px solid #eee; padding-bottom:5px;">🗺️ 地形影响</h3>
+                <ul style="margin:0; padding-left:20px; list-style-type: disc;">
+                    <li style="margin-bottom:5px"><b>🌊 水域</b>：移动速度 <b>x2</b>。但入水/上岸时会强制停止。</li>
+                    <li style="margin-bottom:5px"><b>⛰️ 山地</b>：<b>防御 x2</b> (例: 2人守山需5人才能攻破)。不可穿越，上山耗2步，下山0步。</li>
+                </ul>
+
             </div>
             <div style="text-align: center; margin-top: 20px;">
-                <button class="game-btn" style="background:#2c3e50; color:white; width:100%" onclick="toggleTutorial()">明白了</button>
+                <button class="game-btn" style="background:#2c3e50; color:white; width:100%" onclick="toggleTutorial()">明白，开战！</button>
             </div>
         </div>
     </div>
