@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>征服的传奇 - 军团争霸 (修复版)</title>
+    <title>古战天棋</title>
     <style>
         :root {
-            --cell-size: 42px; /* JS将动态修改此值 */
+            --cell-size: 42px;
             --bg-color: #1a1a1d;
-            --p1-color: #e74c3c; /* 帝国红 (AI) */
-            --p2-color: #3498db; /* 联盟蓝 (玩家) */
+            --p1-color: #e74c3c; /* 帝国红 */
+            --p2-color: #3498db; /* 联盟蓝 */
             --wall-color: #7f8c8d;
             --highlight-move: rgba(241, 196, 15, 0.5);
             --highlight-attack: rgba(231, 76, 60, 0.7);
@@ -138,7 +138,7 @@
             position: relative;
             display: flex; justify-content: center; align-items: center;
             filter: drop-shadow(0 4px 3px rgba(0,0,0,0.6));
-            transition: transform 0.2s;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
         /* 棋子 SVG 形状 */
@@ -146,7 +146,7 @@
         .unit-p1 .piece-shape path { fill: var(--p1-color); }
         .unit-p2 .piece-shape path { fill: var(--p2-color); }
 
-        /* 棋子中间的人数 */
+        /* 棋子中间的人数 - 调整位置到圆心 */
         .unit-count {
             position: absolute;
             color: #fff;
@@ -154,24 +154,20 @@
             font-size: 1.2rem;
             text-shadow: 0 2px 3px #000;
             z-index: 2;
-            top: 25%;
+            top: 25%; /* 视觉中心 */
             left: 0; right: 0; text-align: center;
             pointer-events: none;
         }
 
         /* 行动后变暗 */
-        .unit-container.unit-moved .chess-piece {
+        .unit-moved .chess-piece {
             filter: brightness(0.6) grayscale(0.6) drop-shadow(0 2px 1px rgba(0,0,0,0.8));
             opacity: 0.9;
-        }
-        /* 确保计数也变暗一点 */
-        .unit-container.unit-moved .unit-count {
-            opacity: 0.8;
         }
 
         /* 选中 */
         .unit-selected .chess-piece {
-            transform: scale(1.2) translateY(-5px);
+            transform: scale(1.25) translateY(-5px);
             filter: drop-shadow(0 0 10px #f1c40f);
         }
         
@@ -200,26 +196,24 @@
             animation: floatUp 1s forwards; z-index: 999; pointer-events: none; white-space: nowrap;
         }
 
-        /* 全屏结算动画 */
-        #game-over-screen {
-            position: fixed; inset: 0; z-index: 2000; display: none;
-            flex-direction: column; justify-content: center; align-items: center;
-            background: rgba(0,0,0,0.9); color: white; opacity: 0; transition: opacity 1s;
+        /* 占领城市特效 */
+        .capture-effect {
+            position: absolute; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 2.5rem; z-index: 999;
+            animation: riseUp 1s ease-out forwards;
+            pointer-events: none;
+            text-shadow: 0 0 20px gold;
         }
-        #game-over-screen.show { display: flex; opacity: 1; }
-        #game-over-title { font-size: 4rem; font-weight: 900; margin-bottom: 20px; text-transform: uppercase; letter-spacing: 5px; }
-        .victory-mode { background: radial-gradient(circle, rgba(241, 196, 15, 0.4) 0%, rgba(0,0,0,0.95) 80%); }
-        .victory-mode #game-over-title { color: #f1c40f; text-shadow: 0 0 20px #f39c12, 0 0 40px #e67e22; animation: win-pulse 2s infinite; }
-        .defeat-mode { background: radial-gradient(circle, rgba(192, 57, 43, 0.4) 0%, rgba(0,0,0,0.95) 80%); }
-        .defeat-mode #game-over-title { color: #c0392b; text-shadow: 0 0 10px #e74c3c; font-family: 'Courier New', Courier, monospace; }
-        
-        .restart-btn {
-            padding: 15px 40px; font-size: 1.5rem; background: white; color: black; border: none;
-            border-radius: 50px; cursor: pointer; font-weight: bold; margin-top: 30px;
-            box-shadow: 0 0 20px rgba(255,255,255,0.5); transition: transform 0.2s;
+        /* 合并特效 */
+        .merge-ring {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            border: 4px solid #2ecc71; border-radius: 50%; opacity: 0;
+            animation: mergePulse 0.6s ease-out; z-index: 20; pointer-events: none;
         }
-        .restart-btn:hover { transform: scale(1.1); }
 
+        @keyframes riseUp { 0% { transform: translateY(10px) scale(0.5); opacity: 0; } 50% { opacity: 1; transform: translateY(-10px) scale(1.2); } 100% { opacity: 0; transform: translateY(-30px) scale(1); } }
+        @keyframes mergePulse { 0% { width: 150%; height: 150%; opacity: 0; border-width: 2px; } 50% { opacity: 1; border-width: 4px; } 100% { width: 50%; height: 50%; opacity: 0; border-width: 0px; } }
         @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-30px); } }
         @keyframes slash { 0% { transform: scale(0.5) rotate(-45deg); opacity: 0; } 50% { transform: scale(1.5) rotate(0deg); opacity: 1; } 100% { transform: scale(1) rotate(45deg); opacity: 0; } }
         @keyframes win-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
@@ -229,15 +223,22 @@
         .info-bar { margin-top: 15px; color: #bdc3c7; font-size: 0.9rem; text-align: center; }
         
         /* 通用弹窗 */
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: flex; justify-content: center; align-items: center; z-index: 999; backdrop-filter: blur(3px); opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center; z-index: 999; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
         .modal-overlay.show { opacity: 1; pointer-events: auto; }
-        .modal-content { background: #fff; color: #333; width: 90%; max-width: 450px; border-radius: 12px; padding: 20px; transform: translateY(20px); transition: transform 0.3s; }
+        .modal-content { background: #fff; color: #333; width: 90%; max-width: 450px; border-radius: 16px; padding: 25px; transform: translateY(20px); transition: transform 0.3s; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
         .modal-overlay.show .modal-content { transform: translateY(0); }
-        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px; }
         .close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #7f8c8d; }
-        .settings-group { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
-        .option-btn { padding: 12px; border: 2px solid #ecf0f1; background: #fff; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; }
-        .option-btn.active { background: #3498db; color: white; border-color: #2980b9; }
+        .settings-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+        .option-btn { padding: 10px 15px; border: 1px solid #ddd; background: #f8f9fa; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; transition: all 0.2s; }
+        .option-btn:hover { background: #e9ecef; }
+        .option-btn.active { background: #3498db; color: white; border-color: #3498db; box-shadow: 0 4px 10px rgba(52,152,219,0.3); }
+        
+        #game-over-screen { position: fixed; inset: 0; z-index: 2000; display: none; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.95); color: white; opacity: 0; transition: opacity 1s; }
+        #game-over-screen.show { display: flex; opacity: 1; }
+        #game-over-title { font-size: 4rem; font-weight: 900; text-transform: uppercase; letter-spacing: 5px; margin-bottom: 20px; }
+        .restart-btn { padding: 12px 30px; font-size: 1.2rem; background: white; color: #000; border: none; border-radius: 30px; cursor: pointer; font-weight: bold; margin-top: 30px; transition: transform 0.2s; }
+        .restart-btn:hover { transform: scale(1.1); }
     </style>
 </head>
 <body>
@@ -341,19 +342,51 @@
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(150, t);
             osc.frequency.exponentialRampToValueAtTime(50, t + 0.1);
-            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.setValueAtTime(0.15, t);
             gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
             osc.connect(gain);
             gain.connect(this.ctx.destination);
             osc.start();
             osc.stop(t + 0.1);
         },
+        splash() { 
+            if(this.ctx.state === 'suspended') this.ctx.resume();
+            const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine'; 
+            osc.frequency.setValueAtTime(400, t);
+            osc.frequency.linearRampToValueAtTime(100, t + 0.3);
+            gain.gain.setValueAtTime(0.2, t);
+            gain.gain.linearRampToValueAtTime(0, t + 0.3);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            osc.stop(t + 0.3);
+        },
         water() { this.play(250, 'sine', 0.2, 0.05); },
         climb() { this.play(80, 'sawtooth', 0.2, 0.1); },
         spawn() { this.play(400, 'square', 0.15, 0.1); },
         kill() { this.play(100, 'sawtooth', 0.1, 0.3); setTimeout(() => this.play(800, 'sawtooth', 0.2, 0.1), 50); },
-        merge() { this.play(600, 'sine', 0.2, 0.1); },
-        capture() { this.play(500, 'square', 0.4, 0.2); },
+        merge() { 
+            this.play(600, 'sine', 0.1, 0.2); 
+            setTimeout(() => this.play(800, 'sine', 0.2, 0.1), 100); 
+        },
+        capture() { 
+            let now = this.ctx.currentTime;
+            [392, 523, 659].forEach((f, i) => {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.value = f;
+                gain.gain.setValueAtTime(0.2, now + i*0.1);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + i*0.1 + 0.4);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now + i*0.1);
+                osc.stop(now + i*0.1 + 0.4);
+            });
+        },
         win() { 
             let now = this.ctx.currentTime;
             [523, 659, 784, 1046].forEach((f, i) => {
@@ -468,7 +501,6 @@
         while(state.cities.length < 4 && attempts < 100) { 
             let r1 = Math.floor(Math.random() * (mid - 1));
             let c1 = Math.floor(Math.random() * (BOARD_SIZE - 2)) + 1;
-            
             if(state.map[r1][c1] === TERRAIN.PLAIN) {
                 addCity(r1, c1, PLAYERS.P1);
                 addCity(BOARD_SIZE-1-r1, BOARD_SIZE-1-c1, PLAYERS.P2);
@@ -545,7 +577,6 @@
         }
         
         let enemyCities = state.cities.filter(c => c.owner === PLAYERS.P2);
-        
         aiUnits.sort((a, b) => {
             let distA = Math.min(...enemyCities.map(ec => Math.abs(a.r - ec.r) + Math.abs(a.c - ec.c)));
             let distB = Math.min(...enemyCities.map(ec => Math.abs(b.r - ec.r) + Math.abs(b.c - ec.c)));
@@ -697,9 +728,23 @@
             for(let i=1; i<path.length; i++) {
                 const step = path[i];
                 const t = state.map[step.r][step.c];
+                const prevT = state.map[path[i-1].r][path[i-1].c];
                 let duration = 200; 
-                if(t === TERRAIN.RIVER) { duration = 100; AudioSys.water(); } 
-                else if(t === TERRAIN.MOUNTAIN) { duration = 300; showFloatText(step.r, step.c, "攀登"); AudioSys.climb(); }
+                
+                if(t === TERRAIN.RIVER) { 
+                    duration = 100; 
+                    if(prevT !== TERRAIN.RIVER) { AudioSys.splash(); showFloatText(step.r, step.c, "入水"); }
+                    else AudioSys.water();
+                } 
+                else if(prevT === TERRAIN.RIVER && t !== TERRAIN.RIVER) {
+                    AudioSys.splash(); showFloatText(step.r, step.c, "登陆");
+                }
+                else if(prevT === TERRAIN.MOUNTAIN && t !== TERRAIN.MOUNTAIN) {
+                    showFloatText(step.r, step.c, "下山(0消耗)"); AudioSys.step();
+                }
+                else if(t === TERRAIN.MOUNTAIN) { 
+                    duration = 300; showFloatText(step.r, step.c, "登山"); AudioSys.climb(); 
+                }
                 else { AudioSys.step(); }
 
                 const leftPct = (step.c * 100 / BOARD_SIZE) + '%';
@@ -742,13 +787,14 @@
 
     function executeActionLogic(from, move) {
         const actor = state.units[from.r][from.c];
-        if(!actor) return; // Safety check
+        if(!actor) return;
         const target = state.units[move.r][move.c];
 
         const targetCity = state.cities.find(c => c.r === move.r && c.c === move.c);
         if (targetCity && targetCity.owner !== actor.owner) {
             targetCity.owner = actor.owner;
             AudioSys.capture();
+            playCaptureEffect(move.r, move.c); 
             updateLog(`${actor.owner === PLAYERS.P1 ? '帝国' : '联盟'} 夺取了一座城池！`);
         }
 
@@ -772,6 +818,7 @@
             target.moved = true;
             state.units[from.r][from.c] = null;
             AudioSys.merge();
+            playMergeEffect(move.r, move.c); 
             updateLog("部队合并！");
         }
         checkWinCondition();
@@ -786,7 +833,7 @@
         div.style.left = (c * 100 / BOARD_SIZE) + '%';
         div.style.top = (r * 100 / BOARD_SIZE) + '%';
         layer.appendChild(div);
-        setTimeout(() => div.remove(), 1000);
+        setTimeout(() => div.remove(), 1200);
     }
 
     function playKillEffect(r, c) {
@@ -800,6 +847,33 @@
         effect.style.height = (100 / BOARD_SIZE) + '%';
         layer.appendChild(effect);
         setTimeout(() => effect.remove(), 500);
+    }
+
+    function playCaptureEffect(r, c) {
+        const layer = document.getElementById('effects-layer');
+        const effect = document.createElement('div');
+        effect.className = 'capture-effect';
+        effect.innerHTML = '🚩'; 
+        effect.style.left = (c * 100 / BOARD_SIZE) + '%';
+        effect.style.top = (r * 100 / BOARD_SIZE) + '%';
+        effect.style.width = (100 / BOARD_SIZE) + '%';
+        effect.style.height = (100 / BOARD_SIZE) + '%';
+        layer.appendChild(effect);
+        setTimeout(() => effect.remove(), 800);
+    }
+
+    function playMergeEffect(r, c) {
+        const layer = document.getElementById('effects-layer');
+        const ring = document.createElement('div');
+        ring.className = 'merge-ring';
+        ring.style.left = ((c + 0.5) * 100 / BOARD_SIZE) + '%';
+        ring.style.top = ((r + 0.5) * 100 / BOARD_SIZE) + '%';
+        const cellSize = 100 / BOARD_SIZE; 
+        ring.style.width = cellSize + '%';
+        ring.style.height = cellSize + '%';
+        
+        layer.appendChild(ring);
+        setTimeout(() => ring.remove(), 600);
     }
 
     function checkWinCondition() {
