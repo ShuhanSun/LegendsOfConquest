@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>古战天棋 - 全面战争</title>
+    <title>古战天棋 - 震撼打击</title>
     <style>
         :root {
-            --cell-size: 42px;
+            --cell-size: 42px; /* JS将动态修改此值 */
             --bg-color: #1a1a1d;
-            --p1-color: #e74c3c; /* 帝国红 */
-            --p2-color: #3498db; /* 联盟蓝 */
+            --p1-color: #e74c3c; /* 帝国红 (AI) */
+            --p2-color: #3498db; /* 联盟蓝 (玩家) */
             --wall-color: #7f8c8d;
             --highlight-move: rgba(241, 196, 15, 0.5);
             --highlight-attack: rgba(231, 76, 60, 0.7);
@@ -100,7 +100,7 @@
             position: absolute; top: 10px; left: 10px; pointer-events: none;
             width: calc(100% - 20px); height: calc(100% - 20px);
         }
-        #effects-layer { z-index: 2000; /* 确保特效在最上层 */ }
+        #effects-layer { z-index: 100; }
 
         .cell {
             width: var(--cell-size); height: var(--cell-size);
@@ -158,22 +158,17 @@
             pointer-events: none;
         }
 
-        /* --- 优化：已行动单位样式 --- */
+        /* 行动后变暗 */
         .unit-container.unit-moved .chess-piece {
-            /* 不使用 grayscale，保留颜色但大幅降低亮度 */
-            filter: brightness(0.5) drop-shadow(0 1px 1px rgba(0,0,0,0.5));
-            opacity: 0.85;
+            filter: brightness(0.6) grayscale(0.6) drop-shadow(0 2px 1px rgba(0,0,0,0.8));
+            opacity: 0.9;
         }
-        /* 确保已行动单位不覆盖遮罩，而是自身变暗 */
-        .unit-container.unit-moved::after {
-            content: none; /* 移除之前的黑色遮罩，改用 filter 直接控制 */
-        }
+        .unit-container.unit-moved .unit-count { opacity: 0.8; }
 
         /* 选中 */
         .unit-selected .chess-piece {
             transform: scale(1.25) translateY(-5px);
-            filter: drop-shadow(0 0 15px #f1c40f) brightness(1.1); /* 选中增加亮度 */
-            z-index: 20;
+            filter: drop-shadow(0 0 10px #f1c40f);
         }
         
         .speed-badge {
@@ -191,21 +186,26 @@
         .hl-attack::after { content:''; position:absolute; inset: 5px; border: 3px solid var(--highlight-attack); animation: pulse-attack 1s infinite; z-index: 2; }
         .hl-merge::after { content:''; position:absolute; inset: 5px; border: 3px dashed var(--highlight-merge); z-index: 2; }
 
-        /* --- 优化：击杀特效 --- */
+        /* 特效 */
         .kill-effect {
-            position: absolute; width: 150%; height: 150%; /* 更大 */
+            position: absolute; width: 150%; height: 150%; /* 增大尺寸 */
             left: -25%; top: -25%;
             display: flex; justify-content: center; align-items: center;
-            font-size: 4rem; /* 更大字体 */
-            z-index: 9999; 
-            animation: explosion 0.6s ease-out forwards; 
+            font-size: 4rem; /* 增大字体 */
+            z-index: 3000; 
+            animation: big-explosion 1.2s ease-out forwards; /* 延长动画 */
             pointer-events: none; 
-            text-shadow: 0 0 20px #e74c3c, 0 0 10px white;
+            text-shadow: 0 0 30px #e74c3c, 0 0 60px red; /* 增强光效 */
         }
-        @keyframes explosion {
-            0% { transform: scale(0.5); opacity: 0; }
-            40% { transform: scale(1.5); opacity: 1; }
-            100% { transform: scale(2); opacity: 0; }
+
+        @keyframes big-explosion {
+            0% { transform: scale(0.5) rotate(0deg); opacity: 0; }
+            10% { transform: scale(1.5) rotate(-10deg); opacity: 1; }
+            20% { transform: scale(1.4) rotate(10deg); }
+            30% { transform: scale(1.5) rotate(-10deg); }
+            40% { transform: scale(1.4) rotate(10deg); }
+            50% { transform: scale(1.5) rotate(0deg); opacity: 1; }
+            100% { transform: scale(3); opacity: 0; filter: blur(10px); }
         }
 
         .text-effect {
@@ -228,11 +228,25 @@
             border: 4px solid #2ecc71; border-radius: 50%; opacity: 0;
             animation: mergePulse 0.6s ease-out; z-index: 20; pointer-events: none;
         }
+        /* 征兵(出生)特效 - 弱化亮度 */
+        .spawn-effect {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 10%; height: 10%;
+            background: rgba(255, 255, 255, 0.4); /* 降低不透明度 0.8 -> 0.4 */
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5), 0 0 20px rgba(255,215,0,0.3); /* 减弱阴影 */
+            animation: spawnPop 0.6s ease-out forwards; /* 稍微延长让它柔和 */
+            z-index: 90; pointer-events: none;
+        }
 
+        @keyframes spawnPop {
+            0% { width: 10%; height: 10%; opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            50% { opacity: 1; }
+            100% { width: 100%; height: 100%; opacity: 0; transform: translate(-50%, -50%) scale(1.1); }
+        }
         @keyframes riseUp { 0% { transform: translateY(10px) scale(0.5); opacity: 0; } 50% { opacity: 1; transform: translateY(-10px) scale(1.2); } 100% { opacity: 0; transform: translateY(-30px) scale(1); } }
         @keyframes mergePulse { 0% { width: 150%; height: 150%; opacity: 0; border-width: 2px; } 50% { opacity: 1; border-width: 4px; } 100% { width: 50%; height: 50%; opacity: 0; border-width: 0px; } }
         @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-30px); } }
-        @keyframes slash { 0% { transform: scale(0.5) rotate(-45deg); opacity: 0; } 50% { transform: scale(1.5) rotate(0deg); opacity: 1; } 100% { transform: scale(1) rotate(45deg); opacity: 0; } }
         @keyframes win-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
         @keyframes pulse-border { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
         @keyframes pulse-attack { 0% { opacity: 0.4; transform: scale(0.9); } 50% { opacity: 0.8; transform: scale(1); } 100% { opacity: 0.4; transform: scale(0.9); } }
@@ -303,26 +317,14 @@
     <div id="tutorial-overlay" class="modal-overlay">
         <div class="modal-content">
             <div class="modal-header"><h2>作战指南</h2><button class="close-btn" onclick="toggleTutorial()">×</button></div>
-            <div style="line-height:1.6; font-size: 0.95rem;">
-                <h3 style="color:#3498db; margin:5px 0;">🏆 核心玩法</h3>
-                <p>目标：攻占敌方 <b>4座</b> 城池。移动到敌方城池格子上即可占领。</p>
-                <h3 style="color:#e74c3c; margin:5px 0;">⚔️ 军队机制</h3>
-                <ul>
-                    <li><b>暴兵：</b>回合开始时，城池所有空位<b>自动生成</b>新兵。</li>
-                    <li><b>合兵：</b>将两支己方军队移动到一起可合并。
-                        <br>- 人数相加，<b>上限5人</b>。
-                        <br>- 速度 = 两者最低速度 - 1。
-                    </li>
-                    <li><b>战斗：</b>人数多者胜。进攻方人数 > 防守方人数。</li>
-                </ul>
-                <h3 style="color:#f39c12; margin:5px 0;">🗺️ 地形策略</h3>
-                <ul>
-                    <li><b>⛰️ 山地：</b>防御力 <b>x2</b>。不可直接穿越。上山耗2步，下山0步。</li>
-                    <li><b>🌊 水域：</b>移动速度 <b>x2</b>。入水/上岸会强制结束移动。</li>
-                </ul>
+            <div style="line-height:1.6">
+                <p><b>🏆 胜利：</b> 占领敌方全部 <b>4座</b> 城池。</p>
+                <p><b>🏰 占领：</b> 移动到敌方城池格子上即可占领。</p>
+                <p><b>⚔️ 征兵：</b> 每回合城池空位会自动生成部队。</p>
+                <p><b>🌊 地形：</b> 水域双倍速；山地不可通行。</p>
             </div>
             <div style="text-align: center; margin-top: 20px;">
-                <button class="game-btn" style="background:#2c3e50; color:white; width:100%" onclick="toggleTutorial()">明白，开战！</button>
+                <button class="game-btn" style="background:#2c3e50; color:white; width:100%" onclick="toggleTutorial()">明白了</button>
             </div>
         </div>
     </div>
@@ -378,25 +380,6 @@
             osc.start();
             osc.stop(t + 0.1);
         },
-        water() { this.play(250, 'sine', 0.2, 0.05); },
-        climb() { this.play(80, 'sawtooth', 0.2, 0.1); },
-        spawn() { this.play(400, 'square', 0.15, 0.1); },
-        kill() { 
-            // 爆炸音效模拟
-            if(this.ctx.state === 'suspended') this.ctx.resume();
-            const t = this.ctx.currentTime;
-            const osc = this.ctx.createOscillator();
-            const gain = this.ctx.createGain();
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(150, t);
-            osc.frequency.exponentialRampToValueAtTime(10, t + 0.3);
-            gain.gain.setValueAtTime(0.4, t);
-            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
-            osc.connect(gain);
-            gain.connect(this.ctx.destination);
-            osc.start();
-            osc.stop(t + 0.3);
-        },
         splash() { 
             if(this.ctx.state === 'suspended') this.ctx.resume();
             const t = this.ctx.currentTime;
@@ -411,6 +394,27 @@
             gain.connect(this.ctx.destination);
             osc.start();
             osc.stop(t + 0.3);
+        },
+        water() { this.play(250, 'sine', 0.2, 0.05); },
+        climb() { this.play(80, 'sawtooth', 0.2, 0.1); },
+        spawn() { this.play(400, 'square', 0.15, 0.1); },
+        kill() { 
+            // 增强的击杀音效
+            let now = this.ctx.currentTime;
+            // 高频冲击
+            this.play(800, 'sawtooth', 0.2, 0.5); 
+            // 低频爆炸模拟
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(150, now);
+            osc.frequency.exponentialRampToValueAtTime(10, now + 0.8);
+            gain.gain.setValueAtTime(0.6, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.8);
         },
         merge() { 
             this.play(600, 'sine', 0.1, 0.2); 
@@ -605,6 +609,7 @@
             if(city.owner === state.turn) {
                 if(!state.units[city.r][city.c]) {
                     createUnit(city.r, city.c, state.turn, 1);
+                    playSpawnEffect(city.r, city.c); 
                     newTroops++;
                 }
             }
@@ -949,6 +954,16 @@
         layer.appendChild(ring);
         setTimeout(() => ring.remove(), 600);
     }
+    
+    function playSpawnEffect(r, c) {
+        const layer = document.getElementById('effects-layer');
+        const effect = document.createElement('div');
+        effect.className = 'spawn-effect';
+        effect.style.left = ((c + 0.5) * 100 / BOARD_SIZE) + '%';
+        effect.style.top = ((r + 0.5) * 100 / BOARD_SIZE) + '%';
+        layer.appendChild(effect);
+        setTimeout(() => effect.remove(), 600);
+    }
 
     function checkWinCondition() {
         const p1Cities = state.cities.filter(c => c.owner === PLAYERS.P1).length;
@@ -1022,8 +1037,13 @@
                         el = document.createElement('div');
                         el.id = unit.id;
                         el.className = 'unit-wrapper';
-                        // Placeholder, content updated below
-                        el.innerHTML = `<div class="unit-container"></div>`;
+                        el.innerHTML = `
+                            <div class="unit-container">
+                                ${SVG_CHESS_PAWN}
+                                <div class="unit-count"></div>
+                                <div class="speed-badge"></div>
+                            </div>
+                        `;
                         layer.appendChild(el);
                         el.style.left = leftPct; el.style.top = topPct;
                     }
@@ -1042,6 +1062,13 @@
                     // Decide which icon to show
                     const svgIcon = unit.count === 5 ? SVG_CHESS_KING : SVG_CHESS_PAWN;
                     
+                    // Only update innerHTML if icon type changed to avoid flicker, but here simplest is update
+                    // To optimize, check current content. But 5->King is rare event.
+                    // Just update.
+                    // Note: updating innerHTML kills child elements not in string.
+                    // Our string includes unit-count and speed-badge divs.
+                    // BUT we need to update text content of those divs.
+                    // Creating fresh HTML string is easiest.
                     container.innerHTML = `
                         ${svgIcon}
                         <div class="unit-count">${unit.count}</div>
