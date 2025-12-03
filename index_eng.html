@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Legends of Conquest - Hall of Heroes</title>
+    <style>
+        :root {
+            --cell-size: 42px; /* JS will dynamically change this value */
+            --bg-color: #1a1a1d;
+            --p1-color: #e74c3c; /* Empire Red (AI) */
+            --p2-color: #3498db; /* Alliance Blue (Player) */
+            --wall-color: #7f8c8d;
+            --highlight-move: rgba(241, 196, 15, 0.5);
+            --highlight-attack: rgba(231, 76, 60, 0.7);
+            --highlight-merge: rgba(46, 204, 113, 0.6);
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: #ecf0f1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 5px;
+            margin: 0;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* Top dashboard */
+        .dashboard {
+            display: flex;
+            width: 98%;
+            max-width: 700px;
+            justify-content: space-between;
+            align-items: center;
+            background: #2c3e50;
+            padding: 5px 15px;
+            border-radius: 12px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+            font-size: 0.9rem;
+            z-index: 20;
+        }
+
+        .player-stats {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 5px 15px;
+            border-radius: 8px;
+            min-width: 80px;
+            transition: all 0.3s;
+        }
+
+        .active-turn { 
+            box-shadow: 0 0 15px 2px rgba(255,255,255,0.1); 
+            transform: scale(1.05); 
+            background: rgba(255,255,255,0.05); 
+        }
+        .p1-stats { border-bottom: 4px solid var(--p1-color); color: var(--p1-color); }
+        .p2-stats { border-bottom: 4px solid var(--p2-color); color: var(--p2-color); }
+
+        .stat-row { display: flex; gap: 10px; font-weight: bold; margin-top: 4px; color: #fff; align-items: center; }
+        
+        /* Dashboard icon style */
+        .dash-icon {
+            width: 1.2em; height: 1.2em; 
+            fill: currentColor; 
+            vertical-align: text-bottom;
+            filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+        }
+
+        .controls { display: flex; gap: 8px; }
+
+        .game-btn {
+            border: none; padding: 8px 16px; border-radius: 20px; color: #2c3e50;
+            font-weight: 900; font-size: 0.9rem; cursor: pointer; transition: transform 0.1s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        
+        #end-turn-btn {
+            background: linear-gradient(135deg, #f1c40f, #f39c12);
+            box-shadow: 0 4px 0 #d35400;
+        }
+        #end-turn-btn:active { transform: translateY(4px); box-shadow: 0 0 0 #d35400; }
+        #end-turn-btn:disabled { background: #7f8c8d; box-shadow: none; cursor: not-allowed; opacity: 0.7; transform: none;}
+
+        .icon-btn {
+            background: #ecf0f1; box-shadow: 0 4px 0 #bdc3c7; width: 36px; padding: 0; font-size: 1.1rem;
+        }
+        .icon-btn:active { transform: translateY(4px); box-shadow: 0 0 0 #bdc3c7; }
+
+        /* Board container */
+        .board-wrapper {
+            position: relative; padding: 10px; background: #111; border-radius: 8px;
+            box-shadow: 0 0 40px rgba(0,0,0,0.9);
+        }
+
+        #game-board {
+            display: grid; gap: 1px; background-color: #000; border: 4px solid #444;
+        }
+
+        #units-layer, #effects-layer {
+            position: absolute; top: 10px; left: 10px; pointer-events: none;
+            width: calc(100% - 20px); height: calc(100% - 20px);
+        }
+        #effects-layer { z-index: 100; }
+
+        .cell {
+            width: var(--cell-size); height: var(--cell-size);
+            display: flex; justify-content: center; align-items: center;
+            position: relative; cursor: pointer; box-sizing: border-box; overflow: hidden;
+        }
+
+        /* Terrain */
+        @keyframes water-flow { 0% { background-position: 0 0; } 100% { background-position: 40px 40px; } }
+        .terrain-0 { background-color: #27ae60; background-image: radial-gradient(#2ecc71 10%, transparent 11%); background-size: 10px 10px; opacity: 0.9; }
+        .terrain-1 { background-color: #b7950b; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 10 L10 90 H90 Z' fill='%23d4ac0d' stroke='%239a7d0a' stroke-width='3'/%3E%3Cpath d='M50 10 L30 90 H70 Z' fill='%23f1c40f' opacity='0.3'/%3E%3Cpath d='M50 10 L50 90' stroke='%237d6608' stroke-width='2' opacity='0.3'/%3E%3C/svg%3E"); background-size: 90%; background-repeat: no-repeat; background-position: bottom center; }
+        .terrain-2 { background-color: #2980b9; background-image: repeating-linear-gradient(45deg, rgba(255,255,255,0.15) 0, rgba(255,255,255,0.15) 5px, transparent 5px, transparent 15px), radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 2px, transparent 3px); background-size: 30px 30px; animation: water-flow 3s linear infinite; }
+        /* Small city tile style */
+        .terrain-3 { 
+            background-color: #7f8c8d; 
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M20 80 L20 40 L10 40 L10 20 L30 20 L30 40 L50 30 L70 40 L70 20 L90 20 L90 40 L80 40 L80 80 Z' fill='%2395a5a6' stroke='%232c3e50' stroke-width='4'/%3E%3Crect x='35' y='50' width='30' height='30' fill='%232c3e50' opacity='0.3'/%3E%3C/svg%3E");
+            background-size: 80%; background-repeat: no-repeat; background-position: center;
+        }
+        .terrain-4 { background-color: #0a3d62; background-image: radial-gradient(circle at center, rgba(255,255,255,0.15) 1px, transparent 2px); background-size: 14px 14px; animation: water-flow 8s linear infinite; }
+
+        /* City ownership color */
+        .city-p1 { background-color: rgba(231, 76, 60, 0.4); box-shadow: inset 0 0 0 3px var(--p1-color); }
+        .city-p2 { background-color: rgba(52, 152, 219, 0.4); box-shadow: inset 0 0 0 3px var(--p2-color); }
+
+        /* Unit style */
+        .unit-wrapper {
+            position: absolute; width: var(--cell-size); height: var(--cell-size);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 10; pointer-events: none;
+            transition: top 0.2s linear, left 0.2s linear; 
+        }
+
+        .chess-piece {
+            width: 90%; height: 90%;
+            position: relative;
+            display: flex; justify-content: center; align-items: center;
+            filter: drop-shadow(0 4px 3px rgba(0,0,0,0.6));
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Unit SVG shape */
+        .piece-shape path { stroke: #fff; stroke-width: 2px; }
+        .unit-p1 .piece-shape path { fill: var(--p1-color); }
+        .unit-p2 .piece-shape path { fill: var(--p2-color); }
+
+        /* Unit soldier count (center) */
+        .unit-count {
+            position: absolute;
+            color: #fff;
+            font-weight: 900;
+            font-size: 1.2rem;
+            text-shadow: 0 2px 3px #000;
+            z-index: 2;
+            top: 25%; left: 0; right: 0; text-align: center;
+            pointer-events: none;
+        }
+
+        /* Darker after moved */
+        .unit-container.unit-moved .chess-piece {
+            filter: brightness(0.6) grayscale(0.6) drop-shadow(0 2px 1px rgba(0,0,0,0.8));
+            opacity: 0.9;
+        }
+        .unit-container.unit-moved .unit-count { opacity: 0.8; }
+
+        /* Selected */
+        .unit-selected .chess-piece {
+            transform: scale(1.25) translateY(-5px);
+            filter: drop-shadow(0 0 10px #f1c40f);
+        }
+        
+        .speed-badge {
+            display: none; position: absolute; top: 0; right: 0;
+            background: #2c3e50; color: #f1c40f; border-radius: 50%;
+            width: 14px; height: 14px; font-size: 9px;
+            justify-content: center; align-items: center; border: 1px solid white; 
+            z-index: 11;
+        }
+        .unit-selected .speed-badge { display: flex; }
+
+        /* Highlights */
+        .selected-cell::after { content: ''; position: absolute; inset: 0; border: 3px solid #f1c40f; border-radius: 4px; z-index: 5; animation: pulse-border 1.5s infinite; }
+        .hl-move::after { content:''; position:absolute; inset: 35%; background: var(--highlight-move); border-radius: 50%; box-shadow: 0 0 5px var(--highlight-move); z-index: 2; }
+        .hl-attack::after { content:''; position:absolute; inset: 5px; border: 3px solid var(--highlight-attack); animation: pulse-attack 1s infinite; z-index: 2; }
+        .hl-merge::after { content:''; position:absolute; inset: 5px; border: 3px dashed var(--highlight-merge); z-index: 2; }
+
+        /* FX */
+        .kill-effect {
+            position: absolute; width: 150%; height: 150%; display: flex; justify-content: center; align-items: center;
+            font-size: 4rem; z-index: 3000; animation: big-explosion 1.2s ease-out forwards; pointer-events: none; text-shadow: 0 0 30px #e74c3c, 0 0 60px red;
+        }
+
+        @keyframes big-explosion {
+            0% { transform: scale(0.5) rotate(0deg); opacity: 0; }
+            10% { transform: scale(1.5) rotate(-10deg); opacity: 1; }
+            20% { transform: scale(1.4) rotate(10deg); }
+            30% { transform: scale(1.5) rotate(-10deg); }
+            40% { transform: scale(1.4) rotate(10deg); }
+            50% { transform: scale(1.5) rotate(0deg); opacity: 1; }
+            100% { transform: scale(3); opacity: 0; filter: blur(10px); }
+        }
+
+        .text-effect {
+            position: absolute; color: #fff; font-weight: bold; font-size: 0.8rem; text-shadow: 0 1px 2px black;
+            animation: floatUp 1s forwards; z-index: 999; pointer-events: none; white-space: nowrap;
+        }
+
+        /* City capture FX */
+        .capture-effect {
+            position: absolute; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 2.5rem; z-index: 999;
+            animation: riseUp 1s ease-out forwards;
+            pointer-events: none;
+            text-shadow: 0 0 20px gold;
+        }
+        /* Merge FX */
+        .merge-ring {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            border: 4px solid #2ecc71; border-radius: 50%; opacity: 0;
+            animation: mergePulse 0.6s ease-out; z-index: 20; pointer-events: none;
+        }
+        /* Spawn FX (weakened brightness) */
+        .spawn-effect {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 10%; height: 10%;
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255,255,255,0.5), 0 0 20px rgba(255,215,0,0.3);
+            animation: spawnPop 0.6s ease-out forwards;
+            z-index: 90; pointer-events: none;
+        }
+
+        @keyframes spawnPop {
+            0% { width: 10%; height: 10%; opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            50% { opacity: 1; }
+            100% { width: 100%; height: 100%; opacity: 0; transform: translate(-50%, -50%) scale(1.1); }
+        }
+        @keyframes riseUp { 0% { transform: translateY(10px) scale(0.5); opacity: 0; } 50% { opacity: 1; transform: translateY(-10px) scale(1.2); } 100% { opacity: 0; transform: translateY(-30px) scale(1); } }
+        @keyframes mergePulse { 0% { width: 150%; height: 150%; opacity: 0; border-width: 2px; } 50% { opacity: 1; border-width: 4px; } 100% { width: 50%; height: 50%; opacity: 0; border-width: 0px; } }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-30px); } }
+        @keyframes win-pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        @keyframes pulse-border { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+        @keyframes pulse-attack { 0% { opacity: 0.4; transform: scale(0.9); } 50% { opacity: 0.8; transform: scale(1); } 100% { opacity: 0.4; transform: scale(0.9); } }
+
+        .info-bar { margin-top: 15px; color: #bdc3c7; font-size: 0.9rem; text-align: center; }
+        
+        /* Generic modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center; z-index: 999; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+        .modal-overlay.show { opacity: 1; pointer-events: auto; }
+        .modal-content { background: #fff; color: #333; width: 90%; max-width: 450px; border-radius: 16px; padding: 25px; transform: translateY(20px); transition: transform 0.3s; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+        .modal-overlay.show .modal-content { transform: translateY(0); }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px; }
+        .close-btn { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #7f8c8d; }
+        .settings-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; }
+        .option-btn { padding: 10px 15px; border: 1px solid #ddd; background: #f8f9fa; border-radius: 8px; cursor: pointer; display: flex; justify-content: space-between; transition: all 0.2s; }
+        .option-btn:hover { background: #e9ecef; }
+        .option-btn.active { background: #3498db; color: white; border-color: #3498db; box-shadow: 0 4px 10px rgba(52,152,219,0.3); }
+        
+        #game-over-screen { position: fixed; inset: 0; z-index: 2000; display: none; flex-direction: column; justify-content: center; align-items: center; background: rgba(0,0,0,0.95); color: white; opacity: 0; transition: opacity 1s; }
+        #game-over-screen.show { display: flex; opacity: 1; }
+        #game-over-title { font-size: 4rem; font-weight: 900; text-transform: uppercase; letter-spacing: 5px; margin-bottom: 20px; }
+        .restart-btn { padding: 12px 30px; font-size: 1.2rem; background: white; color: #000; border: none; border-radius: 30px; cursor: pointer; font-weight: bold; margin-top: 30px; transition: transform 0.2s; }
+        .restart-btn:hover { transform: scale(1.1); }
+
+        /* Credits section */
+        .credits-section { margin-top: 20px; padding-top: 15px; border-top: 1px solid #eee; text-align: center; font-size: 0.85rem; color: #7f8c8d; }
+        .credits-name { font-weight: bold; color: #2c3e50; margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+
+    <div class="dashboard">
+        <div class="player-stats p1-stats" id="p1-box">
+            <span>🤖 Empire (AI)</span>
+            <div class="stat-row">
+                <span>🏰 <span id="p1-cities">4</span></span>
+                <span>
+                    <svg viewBox="0 0 100 100" class="dash-icon">
+                        <path d="M50 10 C 35 10 25 20 25 30 C 25 38 30 44 35 46 L 35 75 L 20 85 L 80 85 L 65 75 L 65 50 C 70 48 75 38 75 30 C 75 20 65 10 50 10 Z" />
+                    </svg> 
+                    <span id="p1-pop">0</span>
+                </span>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="settings-btn" class="game-btn icon-btn" onclick="toggleSettings()">⚙️</button>
+            <button id="help-btn" class="game-btn icon-btn" onclick="toggleTutorial()">📜</button>
+            <button id="end-turn-btn" class="game-btn" onclick="endTurn()">End Turn</button>
+        </div>
+        
+        <div class="player-stats p2-stats" id="p2-box">
+            <span>🔵 Alliance (You)</span>
+            <div class="stat-row">
+                <span>🏰 <span id="p2-cities">4</span></span>
+                <span>
+                    <svg viewBox="0 0 100 100" class="dash-icon">
+                        <path d="M50 10 C 35 10 25 20 25 30 C 25 38 30 44 35 46 L 35 75 L 20 85 L 80 85 L 65 75 L 65 50 C 70 48 75 38 75 30 C 75 20 65 10 50 10 Z" />
+                    </svg> 
+                    <span id="p2-pop">0</span>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="board-wrapper">
+        <div id="game-board"></div>
+        <div id="units-layer"></div>
+        <div id="effects-layer"></div>
+    </div>
+    
+    <div class="info-bar" id="game-log">Battle begins. Capture all enemy cities.</div>
+
+    <!-- Fullscreen result animation -->
+    <div id="game-over-screen">
+        <div id="game-over-title">VICTORY</div>
+        <div id="game-over-msg">You have conquered these lands!</div>
+        <button class="restart-btn" onclick="location.reload()">Play Again</button>
+    </div>
+
+    <!-- Tutorial modal -->
+    <div id="tutorial-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><h2>⚔️ Battle Guide</h2><button class="close-btn" onclick="toggleTutorial()">×</button></div>
+            <div style="line-height:1.6; font-size: 0.9rem; text-align: left;">
+                
+                <h3 style="color:#f39c12; margin:10px 0 5px; border-bottom:1px solid #eee; padding-bottom:5px;">🏆 Victory Goal</h3>
+                <p style="margin:5px 0">There are <b>4 cities</b> for each side (red and blue). Move onto an enemy city tile to capture it. <b>Capture all enemy cities</b> to win.</p>
+
+                <h3 style="color:#e74c3c; margin:15px 0 5px; border-bottom:1px solid #eee; padding-bottom:5px;">⚔️ Combat & Merging</h3>
+                <ul style="margin:0; padding-left:20px; list-style-type: disc;">
+                    <li style="margin-bottom:5px"><b>Combat rule</b>: <b>More soldiers win</b>. The attacker’s count must be <b>&gt;</b> the defender’s count.</li>
+                    <li style="margin-bottom:5px"><b>Merge rule</b>: Move onto one of your own units to merge.
+                        <br>👉 <b>Max size: 5</b> (a full squad becomes a “king” unit).
+                        <br>👉 <b>Cost</b>: After merging, speed becomes lower.
+                    </li>
+                    <li style="margin-bottom:5px"><b>Auto-recruit</b>: At the start of your turn, all your cities with <b>empty tiles</b> will spawn new units.</li>
+                </ul>
+
+                <h3 style="color:#3498db; margin:15px 0 5px; border-bottom:1px solid #eee; padding-bottom:5px;">🗺️ Terrain Effects</h3>
+                <ul style="margin:0; padding-left:20px; list-style-type: disc;">
+                    <li style="margin-bottom:5px"><b>🌊 Water</b>: Move speed <b>x2</b>. But entering/leaving water will force stop this turn.</li>
+                    <li style="margin-bottom:5px"><b>⛰️ Mountain</b>: <b>Defense x2</b> (example: 2 defenders on a mountain need 5 attackers to break). Cannot cross from mountain to mountain. Going up costs more, going down costs 0 movement in logic.</li>
+                </ul>
+
+            </div>
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="game-btn" style="background:#2c3e50; color:white; width:100%" onclick="toggleTutorial()">Got it, fight!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings modal -->
+    <div id="settings-overlay" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header"><h2>Game Settings</h2><button class="close-btn" onclick="toggleSettings()">×</button></div>
+            <div class="settings-group">
+                <div><b>Map Size</b></div>
+                <div class="option-btn active" onclick="setMapSize(13, this)"><span>⚡ Small (13x13)</span></div>
+                <div class="option-btn" onclick="setMapSize(16, this)"><span>🛡️ Medium (16x16)</span></div>
+                <div class="option-btn" onclick="setMapSize(19, this)"><span>🌍 Large (19x19)</span></div>
+            </div>
+            <div class="settings-group">
+                <div><b>AI Difficulty</b></div>
+                <div class="option-btn active" onclick="setDifficulty('low', this)"><span>🟢 Easy</span></div>
+                <div class="option-btn" onclick="setDifficulty('medium', this)"><span>🟡 Normal</span></div>
+                <div class="option-btn" onclick="setDifficulty('high', this)"><span>🔴 Hard</span></div>
+            </div>
+            <button class="game-btn" style="background:#e74c3c; color:white; width:100%" onclick="confirmSettings()">Restart</button>
+            
+            <div class="credits-section">
+                <div class="credits-name">Developer: Shuhan Sun</div>
+                <div>© 2025 Legends of Conquest All Rights Reserved</div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    const AudioSys = {
+        ctx: new (window.AudioContext || window.webkitAudioContext)(),
+        play(freq, type, dur, vol=0.1) {
+            if(this.ctx.state === 'suspended') this.ctx.resume();
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+            gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + dur);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            osc.stop(this.ctx.currentTime + dur);
+        },
+        step() { 
+            if(this.ctx.state === 'suspended') this.ctx.resume();
+            const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(150, t);
+            osc.frequency.exponentialRampToValueAtTime(50, t + 0.1);
+            gain.gain.setValueAtTime(0.15, t);
+            gain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start();
+            osc.stop(t + 0.1);
+        },
+        splash() { 
+            if(this.ctx.state === 'suspended') this.ct
