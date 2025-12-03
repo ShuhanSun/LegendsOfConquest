@@ -1,3 +1,4 @@
+[中文版介绍](https://github.com/ShuhanSun/LegendsOfConquest/blob/main/README_CN.md)
 
 ---
 
