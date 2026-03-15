@@ -1,4 +1,4 @@
-**[Play](https://shuhansun.github.io/LegendsOfConquest/)**
+**[Start Game](https://shuhansun.github.io/LegendsOfConquest/)**
 
 [中文版介绍](https://github.com/ShuhanSun/LegendsOfConquest/blob/main/README_CN.md)
 
@@ -150,3 +150,6 @@ Only merge when preparing for **decisive assaults** (e.g., enemy stronghold or m
 ---
 
 **Good luck, Commander. May your banner rise over the River Valley.**
+Created by Shuhan Sun
+
+**[Start Game](https://shuhansun.github.io/LegendsOfConquest/)**
