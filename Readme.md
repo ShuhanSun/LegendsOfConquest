@@ -1,3 +1,5 @@
+**[Play](https://shuhansun.github.io/LegendsOfConquest/)**
+
 [中文版介绍](https://github.com/ShuhanSun/LegendsOfConquest/blob/main/README_CN.md)
 
 ---
